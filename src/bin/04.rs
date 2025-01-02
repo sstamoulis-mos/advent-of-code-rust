@@ -103,9 +103,9 @@ pub fn part_two(input: &str) -> Option<u64> {
     .ok()?;
     let mut count = 0;
     for window in data.windows((mas.raw_dim()[0], mas.raw_dim()[0])) {
-        if (window.diag() == mas || window.slice(s![..;-1,..]).diag() == mas)
+        if (window.diag() == mas || window.diag().slice(s![..;-1]) == mas)
             && (window.slice(s![..,..;-1]).diag() == mas
-                || window.slice(s![..;-1,..;-1]).diag() == mas)
+                || window.slice(s![..,..;-1]).diag().slice(s![..;-1]) == mas)
         {
             count += 1
         }
