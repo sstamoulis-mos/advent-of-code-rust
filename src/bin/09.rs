@@ -10,6 +10,7 @@ mod common {
 
     use DiskBlock::{File, Free};
 
+    #[derive(Clone, Copy)]
     pub enum DiskBlock {
         File(u64),
         Free,
@@ -152,13 +153,12 @@ pub fn part_one(input: &str) -> Option<u64> {
 
 mod part_two {
     use std::{
-        collections::HashSet,
         fmt::Display,
-        ops::{Deref, RangeBounds},
+        ops::{Deref, Range},
     };
 
     use itertools::Itertools;
-    use ndarray::{s, Array, ArrayViewMut};
+    use ndarray::{s, Array};
 
     use crate::common::{
         DiskBlock,
@@ -176,23 +176,20 @@ mod part_two {
         }
     }
 
-    fn get_range_with_id<'a>(
-        disk: Array<DiskBlock, ndarray::Ix1>,
-        id: u64,
-    ) -> impl RangeBounds<usize> {
+    fn get_range_with_id<'a>(disk: &Array<DiskBlock, ndarray::Ix1>, id: u64) -> Range<usize> {
         let mut iter = disk.indexed_iter().filter_map(|(i, b)| match b {
             File(file_id) if *file_id == id => Some(i),
             _ => None,
         });
         let start = iter.next().unwrap();
-        iter.next()
-            .and_then(|start| Some(start..=iter.last().unwrap_or(start)))
+        let end = iter.last().unwrap_or(start);
+        start..end + 1
     }
 
     fn get_first_free_space_range(
-        disk: Array<DiskBlock, ndarray::Ix1>,
+        disk: &Array<DiskBlock, ndarray::Ix1>,
         size: usize,
-    ) -> Option<impl std::ops::RangeBounds<usize>> {
+    ) -> Option<Range<usize>> {
         for i in 0..disk.len() {
             if i + size <= disk.len()
                 && disk
@@ -209,14 +206,26 @@ mod part_two {
     impl From<DiskMap> for CompactDiskMap {
         fn from(value: DiskMap) -> Self {
             let DiskMap(mut disk) = value;
-            let max_id = *disk.iter().filter_map(|b| match b {
-                File(id) => Some(id),
-                Free => None,
-            }).max().unwrap();
+            let max_id = *disk
+                .iter()
+                .filter_map(|b| match b {
+                    File(id) => Some(id),
+                    Free => None,
+                })
+                .max()
+                .unwrap();
             for id in (0..=max_id).rev() {
-                let file_range = get_range_with_id(disk, id);
+                let file_range = get_range_with_id(&disk, id);
+                if let Some(space_range) =
+                    get_first_free_space_range(&disk, file_range.clone().count())
+                {
+                    if space_range.start < file_range.start {
+                        file_range
+                            .zip_eq(space_range)
+                            .for_each(|(a, b)| disk.swap(a, b));
+                    }
+                }
             }
-            todo!();
             Self(disk)
         }
     }
@@ -229,16 +238,27 @@ mod part_two {
             Ok(())
         }
     }
+
+    impl CompactDiskMap {
+        pub fn checksum(&self) -> u64 {
+            self.indexed_iter()
+                .filter_map(|(i, b)| match b {
+                    File(id) => Some(*id * u64::try_from(i).unwrap()),
+                    Free => None,
+                })
+                .sum()
+        }
+    }
 }
 
 pub fn part_two(input: &str) -> Option<u64> {
     use common::DiskMap;
     use part_two::CompactDiskMap;
     let map = DiskMap::from_input(input);
-    println!("{}", map);
+    // println!("{}", map);
     let compact_map = CompactDiskMap::from(map);
-    println!("{}", compact_map);
-    None
+    // println!("{}", compact_map);
+    Some(compact_map.checksum())
 }
 
 #[cfg(test)]
@@ -254,6 +274,6 @@ mod tests {
     #[test]
     fn test_part_two() {
         let result = part_two(&advent_of_code::template::read_file("examples", DAY));
-        assert_eq!(result, None);
+        assert_eq!(result, Some(2858));
     }
 }
