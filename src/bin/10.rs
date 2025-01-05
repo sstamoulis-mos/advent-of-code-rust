@@ -1,6 +1,10 @@
-use std::{cell::RefCell, fmt::Display, ops::Deref, rc::Rc};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    ops::Deref,
+};
 
-use ndarray::{s, Array};
+use ndarray::Array;
 
 advent_of_code::solution!(10);
 
@@ -49,67 +53,94 @@ impl Map {
     }
 }
 
-#[derive(Debug)]
-struct Node {
-    value: (usize, usize),
-    children: Vec<Rc<RefCell<Node>>>,
-}
-
 pub fn part_one(input: &str) -> Option<u64> {
     let map = Map::from_input(input)?;
     // println!("{}", map);
-    let roots: Vec<_> = map
-        .trailheads()
-        .into_iter()
-        .map(|v| {
-            Rc::new(RefCell::new(Node {
-                value: v,
-                children: vec![],
-            }))
-        })
-        .collect();
-    let mut unprocessed: Vec<_> = roots.iter().cloned().collect();
-    while let Some(node) = unprocessed.pop() {
-        let (row, column) = node.borrow().value;
-        let v = map[(row, column)];
-        for next_value in map
-            .indexed_iter()
-            .filter_map(|(i, e)| (*e == v + 1).then_some(i))
-            .filter(|(r, c)| {
-                (row.saturating_sub(1)..=row + 1).contains(r)
-                    && (column.saturating_sub(1)..=column + 1).contains(c)
-            })
-        {
-            let next_node = Rc::new(RefCell::new(Node {
-                value: next_value,
-                children: Vec::new(),
-            }));
-            node.borrow_mut().children.push(next_node.clone());
-            unprocessed.push(next_node);
-        }
-    }
-    // println!("{:?}", roots);
-    let count = roots
-        .iter()
-        .map(|h| {
-            let mut count = 0;
-            let mut children = h.borrow().children.clone();
-            while let Some(node) = children.pop() {
-                if map[node.borrow().value] == 9 {
-                    count += 1;
-                }
-                for child in node.borrow().children.iter() {
-                    children.push(child.clone());
+    let trailheads = map.trailheads();
+    let mut visited: HashMap<_, _> = trailheads.iter().map(|&i| (i, HashSet::new())).collect();
+    let mut stack: Vec<_> = trailheads.into_iter().map(|i| (i, i)).collect();
+    let mut count = 0;
+    while let Some((root, index)) = stack.pop() {
+        let value = map[index];
+        let (row, column) = index;
+        let candidates = [
+            row.checked_sub(1).and_then(|r| {
+                let index = (r, column);
+                map.get(index).and_then(|&v| Some((index, v)))
+            }),
+            row.checked_add(1).and_then(|r| {
+                let index = (r, column);
+                map.get(index).and_then(|&v| Some((index, v)))
+            }),
+            column.checked_sub(1).and_then(|c| {
+                let index = (row, c);
+                map.get(index).and_then(|&v| Some((index, v)))
+            }),
+            column.checked_add(1).and_then(|c| {
+                let index = (row, c);
+                map.get(index).and_then(|&v| Some((index, v)))
+            }),
+        ];
+        for candidate in candidates {
+            if let Some((c_index, c_value)) = candidate {
+                if c_value == value + 1 {
+                    if c_value == 9 {
+                        if let Some(root_visited) = visited.get_mut(&root) {
+                            if !root_visited.contains(&c_index) {
+                                count += 1;
+                                root_visited.insert(c_index);
+                            }
+                        }
+                    } else {
+                        stack.push((root, c_index));
+                    }
                 }
             }
-            count
-        })
-        .sum();
+        }
+    }
     Some(count)
 }
 
 pub fn part_two(input: &str) -> Option<u64> {
-    None
+    let map = Map::from_input(input)?;
+    // println!("{}", map);
+    let trailheads = map.trailheads();
+    let mut stack: Vec<_> = trailheads;
+    let mut count = 0;
+    while let Some(index) = stack.pop() {
+        let value = map[index];
+        let (row, column) = index;
+        let candidates = [
+            row.checked_sub(1).and_then(|r| {
+                let index = (r, column);
+                map.get(index).and_then(|&v| Some((index, v)))
+            }),
+            row.checked_add(1).and_then(|r| {
+                let index = (r, column);
+                map.get(index).and_then(|&v| Some((index, v)))
+            }),
+            column.checked_sub(1).and_then(|c| {
+                let index = (row, c);
+                map.get(index).and_then(|&v| Some((index, v)))
+            }),
+            column.checked_add(1).and_then(|c| {
+                let index = (row, c);
+                map.get(index).and_then(|&v| Some((index, v)))
+            }),
+        ];
+        for candidate in candidates {
+            if let Some((c_index, c_value)) = candidate {
+                if c_value == value + 1 {
+                    if c_value == 9 {
+                        count += 1;
+                    } else {
+                        stack.push(c_index);
+                    }
+                }
+            }
+        }
+    }
+    Some(count)
 }
 
 #[cfg(test)]
@@ -125,6 +156,6 @@ mod tests {
     #[test]
     fn test_part_two() {
         let result = part_two(&advent_of_code::template::read_file("examples", DAY));
-        assert_eq!(result, None);
+        assert_eq!(result, Some(81));
     }
 }
