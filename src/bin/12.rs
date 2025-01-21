@@ -1,6 +1,10 @@
 advent_of_code::solution!(12);
 
 mod part_one {
+    use std::array;
+
+    use ndarray::IntoDimension;
+
     pub struct Region {
         letter: char,
         positions: Vec<Position>,
@@ -20,6 +24,14 @@ mod part_one {
     pub struct Position {
         pub x: usize,
         pub y: usize,
+    }
+
+    impl ndarray::IntoDimension for Position {
+        type Dim = ndarray::Ix2;
+
+        fn into_dimension(self) -> Self::Dim {
+            [self.y, self.x].into_dimension()
+        }
     }
 
     pub struct Map {
@@ -56,13 +68,35 @@ mod part_one {
             let mut regions = Vec::new();
             let checked = ndarray::Array::from_elem(self.backing_array.raw_dim(), false);
             let mut possible_positions = vec![Position { x: 0, y: 0 }];
-            let mut active_region = None;
+            let mut active_region = Region {
+                letter: todo!(),
+                positions: todo!(),
+            };
             while (checked.iter().any(|&b| b)) {
-                while(possible_positions.len()>0) {
-                    
+                while let Some(pos) = possible_positions.pop() {
+                    if self.backing_array[pos.into_dimension()] == active_region.letter {
+                        active_region.positions.push(pos);
+                        for possible_position in self.get_adjacent_positions(pos) {
+                            possible_positions.push(possible_position);
+                        }
+                    }
                 }
             }
             regions
+        }
+
+        fn get_adjacent_positions(&self, Position { x, y }: Position) -> Vec<Position> {
+            let array = &self.backing_array;
+            vec![
+                y.checked_sub(1).and_then(|y| Some((x, y))), // above
+                y.checked_add(1).and_then(|y| Some((x, y))), // below
+                x.checked_sub(1).and_then(|x| Some((x, y))), // left
+                x.checked_add(1).and_then(|x| Some((x, y))), // right
+            ]
+            .into_iter()
+            .flatten()
+            .filter_map(|(x, y)| array.get((x, y)).and(Some(Position { x, y })))
+            .collect()
         }
     }
 }
